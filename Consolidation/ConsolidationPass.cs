@@ -179,7 +179,8 @@ public static class ConsolidationPass
             db.Tournaments.Add(tournament);
         }
 
-        tournament.TournamentParentName = TournamentNameResolver.Resolve(games.Select(g => g.TournamentName));
+        tournament.TournamentParentName = TournamentNameResolver.Resolve(
+            games.Select(g => (g.TournamentId, g.TournamentParentId, g.TournamentName)));
         tournament.TotalGames = games.Count;
         tournament.TotalPlayers = games
             .SelectMany(g => g.PlayerGames)
