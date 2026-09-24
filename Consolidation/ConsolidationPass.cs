@@ -231,6 +231,7 @@ public static class ConsolidationPass
             playerTournament.DecksPlayed = deckGroups.Count;
             playerTournament.MainDeck = mainDeck;
             playerTournament.Faction = DeckFactionResolver.Resolve(mainDeck);
+            playerTournament.Hero = DeckHeroResolver.Resolve(mainDeck);
             playerTournament.ComputedAt = now;
             playerTournament.RefreshedAt = now;
             // AdminWinsAdjustment / AdminLossesAdjustment / AdminAdjustmentNote

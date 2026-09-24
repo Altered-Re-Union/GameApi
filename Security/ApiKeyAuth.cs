@@ -4,9 +4,11 @@ using System.Text;
 namespace GameApi.Security;
 
 /// <summary>
-/// Fixed-time comparison against a configured API key, shared by every
-/// endpoint protected with the same secret -- vendored from
-/// altered-bga-api's AlteredBgaApi.Security.ApiKeyAuth as-is.
+/// Fixed-time comparison against a configured API key -- vendored from
+/// altered-bga-api's AlteredBgaApi.Security.ApiKeyAuth as-is. Used only by
+/// the admin adjustment endpoint: unlike the read endpoints (AlteredAuth
+/// bearer + "bga-game-history" scope), setting a win/loss adjustment is a
+/// privileged action gated on its own dedicated secret.
 /// </summary>
 public static class ApiKeyAuth
 {

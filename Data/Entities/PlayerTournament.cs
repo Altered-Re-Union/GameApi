@@ -3,9 +3,9 @@ namespace GameApi.Data.Entities;
 /// <summary>
 /// One player's consolidated record within one parent tournament -- composite
 /// key (TournamentParentId, BgaUserId). Wins/Losses/DecksPlayed/MainDeck/
-/// Faction are computed columns, fully rebuilt on every consolidation pass;
-/// the Admin* columns are the opposite -- hand-entered, additive, and never
-/// touched by a recompute (see Consolidation/ConsolidationWorker).
+/// Faction/Hero are computed columns, fully rebuilt on every consolidation
+/// pass; the Admin* columns are the opposite -- hand-entered, additive, and
+/// never touched by a recompute (see Consolidation/ConsolidationWorker).
 /// </summary>
 public class PlayerTournament
 {
@@ -30,10 +30,7 @@ public class PlayerTournament
     /// <summary>Derived from decoding MainDeck -- the modal faction across its cards. See Consolidation/DeckFactionResolver.</summary>
     public string? Faction { get; set; }
 
-    /// <summary>
-    /// Unpopulated in this pass: identifying the hero card needs a fixed
-    /// hero-eligible reference list that doesn't exist in this codebase yet.
-    /// </summary>
+    /// <summary>Derived from decoding MainDeck -- the deck's hero card, normalized to one reference per hero character regardless of which set/product print it actually is. See Consolidation/DeckHeroResolver.</summary>
     public string? Hero { get; set; }
 
     /// <summary>

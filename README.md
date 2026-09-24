@@ -39,15 +39,30 @@ them itself.
 
 ## API
 
-All routes below require `Authorization: Bearer <key>` matching
-`ApiKeys:GameApi`.
+Two different auth models, by how privileged the route is:
 
 - `GET /api/tournaments` -- every tournament with a computed aggregate.
 - `GET /api/tournaments/{tournamentParentId}/players` -- every player's
   row for that tournament, decklist still `DeckfmtCodec`-compressed.
+
+  Both require `Authorization: Bearer <token>` -- an AlteredAuth (Keycloak)
+  access token carrying the `bga-game-history` scope, validated by this
+  service itself (standard OIDC/JWKS via `Keycloak:Authority`, see
+  `Security/BgaJwtAuth.cs` and the `BgaGameHistory` authorization policy in
+  `Program.cs`). `401` with no/invalid token, `403` with a valid token
+  missing the scope. This is the surface a website/other reader calls, so it
+  goes through the same user-facing identity provider as the rest of the
+  ecosystem rather than a service-specific secret.
+
 - `POST /api/tournaments/{tournamentParentId}/players/{bgaUserId}/adjustment`
   -- body `{ winsAdjustment, lossesAdjustment, note }`, `note` required
   non-empty (the audit trail the field exists for).
+
+  Rewriting a recorded result is a privileged action, not just reading one --
+  so this route is deliberately **not** gated on the `bga-game-history` scope
+  every reader holds. It requires `Authorization: Bearer <key>` matching its
+  own `ApiKeys:Adjustment` secret instead; a valid `bga-game-history`-scoped
+  token alone does not unlock it. `401` on a missing/wrong key.
 
 ## Run locally
 
@@ -55,7 +70,7 @@ Needs a Postgres reachable at `ConnectionStrings:gameapidb`
 (`appsettings.Development.json` defaults to `localhost` / db `gameapidb` /
 user+password `postgres`), and a running `altered-bga-api` instance to poll
 (`AlteredBgaApi:BaseUrl`, `AlteredBgaApi:ApiKey` matching its
-`ApiKeys:EndGame`):
+`ApiKeys:GameSync`):
 
 ```
 docker run --rm -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=gameapidb -p 5433:5432 postgres:17

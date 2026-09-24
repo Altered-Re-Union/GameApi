@@ -99,6 +99,54 @@ public sealed class ConsolidationPassTests
     }
 
     [Fact]
+    public async Task RunAsync_Hero_IsNormalizedToTheCoreTierPrintRegardlessOfWhichSetTheDeckCardIsFrom()
+    {
+        using var db = NewInMemoryDb();
+        // COREKS' AX_01 is the same hero character as CORE's AX_01.
+        var deck = EncodeDeck("1 ALT_COREKS_B_AX_01_C\n3 ALT_CORE_B_BR_19_C\n");
+        var client = new FakeGameSyncClient().EnqueueOnePage(
+            NewGame(1, BaseTime, 500, "Winter Cup", 500, NewPlayer("p1", "P1", true, deck)));
+
+        await ConsolidationPass.RunAsync(db, client, pageSize: 200);
+
+        var p1 = await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p1");
+        Assert.Equal("ALT_CORE_B_AX_01_C", p1.Hero);
+    }
+
+    [Fact]
+    public async Task RunAsync_Hero_IsNormalizedForTheDusterEoleAndFugueTiers()
+    {
+        using var db = NewInMemoryDb();
+        var dusterDeck = EncodeDeck("1 ALT_DUSTER_A_AX_85_C\n3 ALT_CORE_B_BR_19_C\n");
+        var eoleDeck = EncodeDeck("1 ALT_EOLE_P_BR_105_C\n3 ALT_CORE_B_BR_19_C\n");
+        var fugueDeck = EncodeDeck("1 ALT_FUGUE_B_YZ_130_C\n3 ALT_CORE_B_BR_19_C\n");
+        var client = new FakeGameSyncClient().EnqueueOnePage(
+            NewGame(1, BaseTime, 500, "Winter Cup", 500, NewPlayer("p1", "P1", true, dusterDeck)),
+            NewGame(2, BaseTime.AddMinutes(1), 500, "Winter Cup", 500, NewPlayer("p2", "P2", true, eoleDeck)),
+            NewGame(3, BaseTime.AddMinutes(2), 500, "Winter Cup", 500, NewPlayer("p3", "P3", true, fugueDeck)));
+
+        await ConsolidationPass.RunAsync(db, client, pageSize: 200);
+
+        Assert.Equal("ALT_DUSTER_B_AX_85_C", (await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p1")).Hero);
+        Assert.Equal("ALT_EOLE_B_BR_105_C", (await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p2")).Hero);
+        Assert.Equal("ALT_FUGUE_B_YZ_130_C", (await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p3")).Hero);
+    }
+
+    [Fact]
+    public async Task RunAsync_Hero_IsNullWhenTheDeckHasNoRecognizedHeroCard()
+    {
+        using var db = NewInMemoryDb();
+        var deck = EncodeDeck("3 ALT_CORE_B_BR_19_C\n1 ALT_CORE_B_BR_20_C\n");
+        var client = new FakeGameSyncClient().EnqueueOnePage(
+            NewGame(1, BaseTime, 500, "Winter Cup", 500, NewPlayer("p1", "P1", true, deck)));
+
+        await ConsolidationPass.RunAsync(db, client, pageSize: 200);
+
+        var p1 = await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p1");
+        Assert.Null(p1.Hero);
+    }
+
+    [Fact]
     public async Task RunAsync_AdminAdjustment_SurvivesARecompute()
     {
         using var db = NewInMemoryDb();
