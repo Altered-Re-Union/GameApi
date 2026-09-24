@@ -24,6 +24,8 @@ public sealed class ConsolidationWorker(
             return;
         }
 
+        await RunTournamentParentIdBackfillSafeAsync(stoppingToken);
+
         if (config.RunAtStartup)
         {
             await RunPassSafeAsync(stoppingToken);
@@ -33,6 +35,25 @@ public sealed class ConsolidationWorker(
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             await RunPassSafeAsync(stoppingToken);
+        }
+    }
+
+    /// <summary>Runs once per process lifetime in effect: TournamentParentIdBackfill is its own completion check, so every later call here is a cheap no-op query. Same fail-open handling as RunPassSafeAsync -- a bad restart must never block ordinary consolidation.</summary>
+    private async Task RunTournamentParentIdBackfillSafeAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<GameApiDbContext>();
+            var fixedCount = await TournamentParentIdBackfill.RunOnceAsync(db, cancellationToken);
+            if (fixedCount > 0)
+            {
+                logger.LogInformation("TournamentParentIdBackfill complete: tournamentsFixed={FixedCount}", fixedCount);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "TournamentParentIdBackfill failed");
         }
     }
 
