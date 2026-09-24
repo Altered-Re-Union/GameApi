@@ -192,6 +192,23 @@ public sealed class ConsolidationPassTests
     }
 
     [Fact]
+    public async Task RunAsync_LastGameAt_IsTheLatestReceivedAtAcrossTheTournamentsGames()
+    {
+        using var db = NewInMemoryDb();
+        var client = new FakeGameSyncClient().EnqueueOnePage(
+            NewGame(1, BaseTime, 500, "Winter Cup", 500, NewPlayer("p1", "P1", true)),
+            NewGame(2, BaseTime.AddMinutes(1), 500, "Winter Cup", 500, NewPlayer("p1", "P1", true)),
+            // Out of receive order -- the earliest-pulled row isn't
+            // necessarily the latest played one.
+            NewGame(3, BaseTime.AddMinutes(-5), 500, "Winter Cup", 500, NewPlayer("p1", "P1", true)));
+
+        await ConsolidationPass.RunAsync(db, client, pageSize: 200);
+
+        var tournament = await db.Tournaments.SingleAsync(t => t.TournamentParentId == 500);
+        Assert.Equal(BaseTime.AddMinutes(1), tournament.LastGameAt);
+    }
+
+    [Fact]
     public async Task RunAsync_MirrorsGamesWithNoTournament_ButProducesNoAggregateForThem()
     {
         using var db = NewInMemoryDb();

@@ -8,9 +8,9 @@ public static class TournamentsHandler
     public static async Task<IResult> IndexAsync(GameApiDbContext db, CancellationToken cancellationToken)
     {
         var tournaments = await db.Tournaments
-            .OrderByDescending(t => t.ComputedAt)
+            .OrderByDescending(t => t.LastGameAt)
             .Select(t => new TournamentSummary(
-                t.TournamentParentId, t.TournamentParentName, t.TotalGames, t.TotalPlayers, t.ComputedAt, t.RefreshedAt))
+                t.TournamentParentId, t.TournamentParentName, t.TotalGames, t.TotalPlayers, t.LastGameAt, t.ComputedAt, t.RefreshedAt))
             .ToListAsync(cancellationToken);
 
         return Results.Ok(new TournamentsResponse(tournaments));
@@ -46,6 +46,7 @@ public sealed record TournamentSummary(
     string? TournamentParentName,
     int TotalGames,
     int TotalPlayers,
+    DateTimeOffset LastGameAt,
     DateTimeOffset ComputedAt,
     DateTimeOffset RefreshedAt);
 

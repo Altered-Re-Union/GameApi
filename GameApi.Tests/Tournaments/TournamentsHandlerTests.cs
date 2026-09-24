@@ -18,6 +18,7 @@ public sealed class TournamentsHandlerTests
             TournamentParentName = "Winter Cup",
             TotalGames = 3,
             TotalPlayers = 2,
+            LastGameAt = DateTimeOffset.UtcNow,
             ComputedAt = DateTimeOffset.UtcNow,
         });
         await db.SaveChangesAsync();
@@ -28,6 +29,38 @@ public sealed class TournamentsHandlerTests
         var tournament = Assert.Single(ok.Value!.Tournaments);
         Assert.Equal(500, tournament.TournamentParentId);
         Assert.Equal("Winter Cup", tournament.TournamentParentName);
+    }
+
+    [Fact]
+    public async Task IndexAsync_OrdersByLastGameAtDescending_RegardlessOfWhenComputed()
+    {
+        using var db = NewInMemoryDb();
+        var baseTime = DateTimeOffset.UtcNow;
+        db.Tournaments.Add(new Tournament
+        {
+            TournamentParentId = 500,
+            TotalGames = 1,
+            TotalPlayers = 1,
+            LastGameAt = baseTime.AddDays(-10),
+            // Recomputed most recently, but its games are the oldest --
+            // ComputedAt must not win the sort.
+            ComputedAt = baseTime,
+        });
+        db.Tournaments.Add(new Tournament
+        {
+            TournamentParentId = 600,
+            TotalGames = 1,
+            TotalPlayers = 1,
+            LastGameAt = baseTime,
+            ComputedAt = baseTime.AddDays(-10),
+        });
+        await db.SaveChangesAsync();
+
+        var result = await TournamentsHandler.IndexAsync(db, CancellationToken.None);
+
+        var ok = Assert.IsType<Ok<TournamentsResponse>>(result);
+        Assert.Equal(600, ok.Value!.Tournaments[0].TournamentParentId);
+        Assert.Equal(500, ok.Value.Tournaments[1].TournamentParentId);
     }
 
     [Fact]

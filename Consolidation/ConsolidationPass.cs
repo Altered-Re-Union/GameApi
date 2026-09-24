@@ -189,6 +189,7 @@ public static class ConsolidationPass
             .Where(id => !string.IsNullOrEmpty(id))
             .Distinct(StringComparer.Ordinal)
             .Count();
+        tournament.LastGameAt = games.Max(g => g.ReceivedAt);
         tournament.ComputedAt = now;
         tournament.RefreshedAt = now;
 
