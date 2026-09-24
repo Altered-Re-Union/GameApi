@@ -17,9 +17,23 @@ namespace GameApi.Consolidation;
 /// itself, not a guess -- BGA never hangs an extension off a tournament's own
 /// name -- so its name is preferred verbatim over any cut stage name whenever
 /// one is present in the group.
+///
+/// One naming shape needs two segments cut, not one: a "Stage 1" stage that
+/// is itself split into groups comes back as "&lt;parent&gt; - Stage 1 - Group
+/// 1"/"...Group 2", so cutting only the last " -" leaves the stray fragment
+/// "&lt;parent&gt; - Stage 1" -- and since two of a group's three stages share
+/// that shape, it used to win the majority vote over the correct "&lt;parent&gt;"
+/// guess from the lone "Stage 2" sibling. Recognizing that specific two-level
+/// suffix and cutting it whole keeps every stage's guess agreeing.
 /// </summary>
 public static class TournamentNameResolver
 {
+    private static readonly string[] TwoLevelStageSuffixes =
+    [
+        " - Stage 1 - Group 1",
+        " - Stage 1 - Group 2",
+    ];
+
     public static string? Resolve(IEnumerable<(long? TournamentId, long? TournamentParentId, string? TournamentName)> stages)
     {
         var named = stages
@@ -51,9 +65,17 @@ public static class TournamentNameResolver
             .Key;
     }
 
-    /// <summary>Cuts a stage name at its last " -"; a name with no such separator has nothing to strip and is kept whole.</summary>
+    /// <summary>Cuts a stage name at its last " -", except for the known two-level "Stage 1 - Group N" shape, which cuts whole; a name with no separator to cut has nothing to strip and is kept whole.</summary>
     private static string StripStageSuffix(string name)
     {
+        foreach (var suffix in TwoLevelStageSuffixes)
+        {
+            if (name.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                return name[..^suffix.Length].TrimEnd();
+            }
+        }
+
         var cutIndex = name.LastIndexOf(" -", StringComparison.Ordinal);
         return cutIndex < 0 ? name : name[..cutIndex].TrimEnd();
     }

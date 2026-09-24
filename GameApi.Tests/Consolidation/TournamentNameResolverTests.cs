@@ -67,6 +67,21 @@ public sealed class TournamentNameResolverTests
     }
 
     [Fact]
+    public void Resolve_AgreesAcrossStage1GroupsAndStage2_DespiteTheExtraDashInStage1Groups()
+    {
+        // The naming pattern found in the pre-tournament_parent_id backfill:
+        // "Stage 1 - Group N" has one more " -" than "Stage 2", so cutting
+        // only the last one left "<prefix> - Stage 1" winning 2-1 over the
+        // correct "<prefix>" guess from the "Stage 2" stage.
+        var name = Resolve(
+            (605542, 602986, "Monday Night Topcut - Season 1 - Week 3 - Stage 1 - Group 1"),
+            (605543, 602986, "Monday Night Topcut - Season 1 - Week 3 - Stage 1 - Group 2"),
+            (602988, 602986, "Monday Night Topcut - Season 1 - Week 3 - Stage 2"));
+
+        Assert.Equal("Monday Night Topcut - Season 1 - Week 3", name);
+    }
+
+    [Fact]
     public void Resolve_PicksTheMostCommonGuess_WhenChildStagesDisagree()
     {
         var name = Resolve(

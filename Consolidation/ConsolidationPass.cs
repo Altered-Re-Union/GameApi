@@ -142,7 +142,8 @@ public static class ConsolidationPass
         return previousParentId;
     }
 
-    private static async Task RecomputeTournamentAsync(GameApiDbContext db, long parentId, CancellationToken cancellationToken)
+    /// <summary>Internal rather than private so TournamentParentIdBackfill can rebuild an aggregate it just re-parented, without duplicating this logic.</summary>
+    internal static async Task RecomputeTournamentAsync(GameApiDbContext db, long parentId, CancellationToken cancellationToken)
     {
         var games = await db.Games
             .Include(g => g.PlayerGames)
