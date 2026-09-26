@@ -33,6 +33,9 @@ public class PlayerTournament
     /// <summary>Derived from decoding MainDeck -- the deck's hero card, normalized to one reference per hero character regardless of which set/product print it actually is. See Consolidation/DeckHeroResolver.</summary>
     public string? Hero { get; set; }
 
+    /// <summary>Every distinct decklist the player used this tournament, most-played first (ties: first-seen), JSON-serialized IReadOnlyList&lt;DeckUsage&gt;. MainDeck above is just this list's first entry, kept for existing consumers.</summary>
+    public string? DecksJson { get; set; }
+
     /// <summary>
     /// Manual correction, additive on top of Wins: admin overrides, BGA
     /// bugs, games played off-platform. Never touched by a recompute.

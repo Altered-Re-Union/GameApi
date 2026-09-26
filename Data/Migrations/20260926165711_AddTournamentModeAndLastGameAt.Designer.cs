@@ -3,6 +3,7 @@ using System;
 using GameApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace GameApi.Data.Migrations
 {
     [DbContext(typeof(GameApiDbContext))]
-    partial class GameApiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926165711_AddTournamentModeAndLastGameAt")]
+    partial class AddTournamentModeAndLastGameAt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -109,9 +112,6 @@ namespace GameApi.Data.Migrations
 
                     b.Property<DateTimeOffset>("ComputedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DecksJson")
-                        .HasColumnType("text");
 
                     b.Property<int>("DecksPlayed")
                         .HasColumnType("integer");

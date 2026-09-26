@@ -83,8 +83,12 @@ var adjustmentApiKey = app.Configuration["ApiKeys:Adjustment"];
 
 app.MapGet("/healthz", () => Results.Ok());
 
-app.MapGet("/api/tournaments", (GameApiDbContext db, CancellationToken cancellationToken) =>
-    TournamentsHandler.IndexAsync(db, cancellationToken))
+app.MapGet("/api/tournaments", (GameApiDbContext db, [AsParameters] TournamentsQuery query, CancellationToken cancellationToken) =>
+    TournamentsHandler.IndexAsync(db, query, cancellationToken))
+    .RequireAuthorization("BgaGameHistory");
+
+app.MapGet("/api/tournaments/modes", (GameApiDbContext db, CancellationToken cancellationToken) =>
+    TournamentsHandler.ModesAsync(db, cancellationToken))
     .RequireAuthorization("BgaGameHistory");
 
 app.MapGet("/api/tournaments/{tournamentParentId:long}/players", (

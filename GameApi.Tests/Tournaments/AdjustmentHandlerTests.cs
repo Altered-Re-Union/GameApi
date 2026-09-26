@@ -12,19 +12,22 @@ public sealed class AdjustmentHandlerTests
     public async Task HandleAsync_SetsTheAdjustmentAndNote_WhenThePlayerTournamentRowExists()
     {
         using var db = NewInMemoryDb();
-        db.PlayerTournaments.Add(new PlayerTournament { TournamentParentId = 500, BgaUserId = "p1", Wins = 3, Losses = 1 });
+        var decksJson = System.Text.Json.JsonSerializer.Serialize(new[] { new DeckUsage("deckA", 2) });
+        db.PlayerTournaments.Add(new PlayerTournament { TournamentParentId = 500, BgaUserId = "p1", Wins = 3, Losses = 1, DecksJson = decksJson });
         await db.SaveChangesAsync();
 
         var result = await AdjustmentHandler.HandleAsync(
             db, 500, "p1", new AdjustmentRequest(1, 0, "Admin-awarded win for a BGA connection bug."), CancellationToken.None);
 
-        Assert.IsType<Ok<PlayerTournamentSummary>>(result);
+        var ok = Assert.IsType<Ok<PlayerTournamentSummary>>(result);
         var stored = await db.PlayerTournaments.SingleAsync();
         Assert.Equal(1, stored.AdminWinsAdjustment);
         Assert.Equal(0, stored.AdminLossesAdjustment);
         Assert.Equal("Admin-awarded win for a BGA connection bug.", stored.AdminAdjustmentNote);
         // The computed tally itself is untouched by the adjustment endpoint.
         Assert.Equal(3, stored.Wins);
+        // The response reflects the player's full deck history, not just MainDeck.
+        Assert.Equal([new DeckUsage("deckA", 2)], ok.Value!.Decks);
     }
 
     [Fact]

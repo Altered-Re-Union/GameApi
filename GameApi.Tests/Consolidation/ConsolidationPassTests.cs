@@ -1,6 +1,8 @@
+using System.Text.Json;
 using AlteredBgaApi.Deckfmt;
 using GameApi.Consolidation;
 using GameApi.Data;
+using GameApi.Data.Entities;
 using GameApi.GameSync;
 using GameApi.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
@@ -65,6 +67,9 @@ public sealed class ConsolidationPassTests
         var p1 = await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p1");
         Assert.Equal(deckA, p1.MainDeck);
         Assert.Equal(2, p1.DecksPlayed);
+
+        var decks = JsonSerializer.Deserialize<List<DeckUsage>>(p1.DecksJson!)!;
+        Assert.Equal([new DeckUsage(deckA, 2), new DeckUsage(deckB, 1)], decks);
     }
 
     [Fact]

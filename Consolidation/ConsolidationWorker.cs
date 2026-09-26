@@ -25,6 +25,7 @@ public sealed class ConsolidationWorker(
         }
 
         await RunTournamentParentIdBackfillSafeAsync(stoppingToken);
+        await RunTournamentMetadataBackfillSafeAsync(stoppingToken);
 
         if (config.RunAtStartup)
         {
@@ -54,6 +55,25 @@ public sealed class ConsolidationWorker(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "TournamentParentIdBackfill failed");
+        }
+    }
+
+    /// <summary>Runs once per process lifetime in effect: TournamentMetadataBackfill is its own completion check, so every later call here is a cheap no-op query. Same fail-open handling as RunPassSafeAsync -- a bad restart must never block ordinary consolidation.</summary>
+    private async Task RunTournamentMetadataBackfillSafeAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<GameApiDbContext>();
+            var backfilledCount = await TournamentMetadataBackfill.RunOnceAsync(db, cancellationToken);
+            if (backfilledCount > 0)
+            {
+                logger.LogInformation("TournamentMetadataBackfill complete: tournamentsBackfilled={BackfilledCount}", backfilledCount);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "TournamentMetadataBackfill failed");
         }
     }
 

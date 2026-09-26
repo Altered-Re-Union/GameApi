@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GameApi.Data;
 using GameApi.Data.Entities;
 using GameApi.GameSync;
@@ -189,6 +190,8 @@ public static class ConsolidationPass
             .Where(id => !string.IsNullOrEmpty(id))
             .Distinct(StringComparer.Ordinal)
             .Count();
+        tournament.Mode = TournamentModeResolver.Resolve(games.Select(g => g.Format));
+        tournament.LastGameAt = games.Max(g => g.ReceivedAt);
         tournament.ComputedAt = now;
         tournament.RefreshedAt = now;
 
@@ -212,13 +215,16 @@ public static class ConsolidationPass
                 .GroupBy(x => x.Player.Deck!, StringComparer.Ordinal)
                 .ToList();
 
-            // Most-frequently-used deck; ties broken by first-seen order
-            // (the order `entries` is already in, since Games was queried
-            // ordered by ReceivedAt/TableId upstream).
-            var mainDeck = deckGroups
+            // Every distinct deck the player used, most-played first; ties
+            // broken by first-seen order (the order `entries` is already in,
+            // since Games was queried ordered by ReceivedAt/TableId
+            // upstream). MainDeck is just this list's first entry.
+            var deckUsages = deckGroups
                 .OrderByDescending(deckGroup => deckGroup.Count())
                 .ThenBy(deckGroup => entries.FindIndex(x => x.Player.Deck == deckGroup.Key))
-                .FirstOrDefault()?.Key;
+                .Select(deckGroup => new DeckUsage(deckGroup.Key, deckGroup.Count()))
+                .ToList();
+            var mainDeck = deckUsages.FirstOrDefault()?.Deck;
 
             var playerTournament = await db.PlayerTournaments.FindAsync([parentId, group.Key], cancellationToken);
             if (playerTournament is null)
@@ -234,6 +240,7 @@ public static class ConsolidationPass
             playerTournament.MainDeck = mainDeck;
             playerTournament.Faction = DeckFactionResolver.Resolve(mainDeck);
             playerTournament.Hero = DeckHeroResolver.Resolve(mainDeck);
+            playerTournament.DecksJson = JsonSerializer.Serialize(deckUsages);
             playerTournament.ComputedAt = now;
             playerTournament.RefreshedAt = now;
             // AdminWinsAdjustment / AdminLossesAdjustment / AdminAdjustmentNote

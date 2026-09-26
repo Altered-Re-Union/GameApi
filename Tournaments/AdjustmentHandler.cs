@@ -54,6 +54,7 @@ public static class AdjustmentHandler
             playerTournament.MainDeck,
             playerTournament.Faction,
             playerTournament.Hero,
+            TournamentsHandler.DeckUsagesOf(playerTournament.DecksJson),
             playerTournament.ComputedAt));
     }
 }

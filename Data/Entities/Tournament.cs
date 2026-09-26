@@ -24,6 +24,12 @@ public class Tournament
     /// <summary>Distinct players across every stage -- a participant count, not a seat count.</summary>
     public int TotalPlayers { get; set; }
 
+    /// <summary>The tournament's deck format (Frontier, Sealed, All Uniques, ...), rolled up from its games' Format -- see Consolidation/TournamentModeResolver.</summary>
+    public string? Mode { get; set; }
+
+    /// <summary>Timestamp of this tournament's most recent game.</summary>
+    public DateTimeOffset? LastGameAt { get; set; }
+
     /// <summary>When the content last actually changed.</summary>
     public DateTimeOffset ComputedAt { get; set; }
 
