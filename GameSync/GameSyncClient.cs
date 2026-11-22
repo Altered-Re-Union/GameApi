@@ -65,4 +65,9 @@ public sealed record GameSyncPlayer(
     string? BgaName,
     bool IsWinner,
     string? Deck,
-    string? PlayedCards);
+    string? PlayedCards,
+    // Appended by altered-bga-api for tournament decklist attribution. Optional
+    // so feed rows (and an altered-bga-api deploy) that predate them still
+    // deserialize -- missing simply means null.
+    string? ReunionUserId = null,
+    string? ReunionPseudo = null);

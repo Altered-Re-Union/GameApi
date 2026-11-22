@@ -81,6 +81,11 @@ app.UseAuthorization();
 // access and "may rewrite results" are different rights.
 var adjustmentApiKey = app.Configuration["ApiKeys:Adjustment"];
 
+// GET /api/tournament-decks (below) is a service-to-service feed for DeckApi,
+// not a reader-facing route: its own static key, same per-consumer convention
+// as ApiKeys:Adjustment. Empty/missing config fails closed (always 401).
+var deckApiKey = app.Configuration["ApiKeys:DeckApi"];
+
 app.MapGet("/healthz", () => Results.Ok());
 
 app.MapGet("/api/tournaments", (GameApiDbContext db, [AsParameters] TournamentsQuery query, CancellationToken cancellationToken) =>
@@ -100,10 +105,7 @@ app.MapPost("/api/tournaments/{tournamentParentId:long}/players/{bgaUserId}/adju
     HttpContext httpContext, GameApiDbContext db, long tournamentParentId, string bgaUserId,
     AdjustmentRequest? request, CancellationToken cancellationToken) =>
 {
-    const string bearerPrefix = "Bearer ";
-    var header = httpContext.Request.Headers.Authorization.ToString();
-    var presentedKey = header.StartsWith(bearerPrefix, StringComparison.Ordinal) ? header[bearerPrefix.Length..] : null;
-    if (!ApiKeyAuth.Matches(presentedKey, adjustmentApiKey))
+    if (!ApiKeyAuth.Matches(PresentedBearerKey(httpContext), adjustmentApiKey))
     {
         return Results.Unauthorized();
     }
@@ -111,7 +113,25 @@ app.MapPost("/api/tournaments/{tournamentParentId:long}/players/{bgaUserId}/adju
     return await AdjustmentHandler.HandleAsync(db, tournamentParentId, bgaUserId, request, cancellationToken);
 });
 
+app.MapGet("/api/tournament-decks", async (
+    HttpContext httpContext, GameApiDbContext db, [AsParameters] TournamentDecksQuery query, CancellationToken cancellationToken) =>
+{
+    if (!ApiKeyAuth.Matches(PresentedBearerKey(httpContext), deckApiKey))
+    {
+        return Results.Unauthorized();
+    }
+
+    return await TournamentDecksHandler.HandleAsync(db, query, cancellationToken);
+});
+
 app.Run();
+
+static string? PresentedBearerKey(HttpContext httpContext)
+{
+    const string bearerPrefix = "Bearer ";
+    var header = httpContext.Request.Headers.Authorization.ToString();
+    return header.StartsWith(bearerPrefix, StringComparison.Ordinal) ? header[bearerPrefix.Length..] : null;
+}
 
 // Makes the top-level statements' implicit Program class public so
 // WebApplicationFactory<Program> can host it from GameApi.Tests.

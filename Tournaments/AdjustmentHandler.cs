@@ -45,6 +45,8 @@ public static class AdjustmentHandler
         return Results.Ok(new PlayerTournamentSummary(
             playerTournament.BgaUserId,
             playerTournament.BgaName,
+            playerTournament.ReunionUserId,
+            playerTournament.ReunionPseudo,
             playerTournament.Wins,
             playerTournament.Losses,
             playerTournament.AdminWinsAdjustment,

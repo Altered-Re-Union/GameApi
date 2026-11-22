@@ -40,6 +40,8 @@
     { "id": 16, "code": "JUDGE", "numberInFactionBits": 5, "legacyRarityBits": false },
     { "id": 17, "code": "MUSUBI", "numberInFactionBits": 5, "legacyRarityBits": false },
     { "id": 18, "code": "WCF25", "numberInFactionBits": 5, "legacyRarityBits": false },
-    { "id": 19, "code": "WCS26", "numberInFactionBits": 7, "legacyRarityBits": false }
+    { "id": 19, "code": "WCS26", "numberInFactionBits": 7, "legacyRarityBits": false },
+    { "id": 20, "code": "EOLETOP", "numberInFactionBits": 7, "legacyRarityBits": false },
+    { "id": 21, "code": "EOLEOP", "numberInFactionBits": 7, "legacyRarityBits": false }
   ]
 }

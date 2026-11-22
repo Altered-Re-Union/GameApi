@@ -137,6 +137,8 @@ public static class ConsolidationPass
                 IsWinner = player.IsWinner,
                 Deck = player.Deck,
                 PlayedCards = player.PlayedCards,
+                ReunionUserId = player.ReunionUserId,
+                ReunionPseudo = player.ReunionPseudo,
             });
         }
 
@@ -149,6 +151,12 @@ public static class ConsolidationPass
         var games = await db.Games
             .Include(g => g.PlayerGames)
             .Where(g => g.TournamentParentId == parentId)
+            // Explicit, stable order: the "first seen" deck tie-break and
+            // BgaName's "latest game" pick below depend on it, and so does
+            // ComputedAt change detection (an unordered read could reorder
+            // tied decks in DecksJson between two otherwise-identical passes).
+            .OrderBy(g => g.ReceivedAt)
+            .ThenBy(g => g.TableId)
             .ToListAsync(cancellationToken);
 
         // Every game that used to point at this parent has since moved
@@ -218,30 +226,80 @@ public static class ConsolidationPass
             // Every distinct deck the player used, most-played first; ties
             // broken by first-seen order (the order `entries` is already in,
             // since Games was queried ordered by ReceivedAt/TableId
-            // upstream). MainDeck is just this list's first entry.
+            // upstream). MainDeck is just this list's first entry. Per-deck
+            // Wins/Losses use the exact same rule as the player totals above.
             var deckUsages = deckGroups
                 .OrderByDescending(deckGroup => deckGroup.Count())
                 .ThenBy(deckGroup => entries.FindIndex(x => x.Player.Deck == deckGroup.Key))
-                .Select(deckGroup => new DeckUsage(deckGroup.Key, deckGroup.Count()))
+                .Select(deckGroup => new DeckUsage(
+                    deckGroup.Key,
+                    deckGroup.Count(),
+                    Wins: deckGroup.Count(x => x.Player.IsWinner),
+                    Losses: deckGroup.Count(x => !x.Player.IsWinner && x.Game.PlayerGames.Any(p => p.IsWinner)),
+                    // Normalized to UTC so the serialized DecksJson is
+                    // byte-identical whether ReceivedAt came straight off the
+                    // feed (any offset) or back from Postgres (always UTC) --
+                    // otherwise the change detection below would see a
+                    // spurious difference on the next recompute.
+                    LastPlayedAt: deckGroup.Max(x => x.Game.ReceivedAt).ToUniversalTime()))
                 .ToList();
             var mainDeck = deckUsages.FirstOrDefault()?.Deck;
 
+            // Most recent game (ReceivedAt, then TableId) that carried a
+            // value wins -- a later game with no ReUnion link never erases an
+            // earlier known one. Each field independently, same as the feed.
+            var newestFirst = entries
+                .OrderByDescending(x => x.Game.ReceivedAt)
+                .ThenByDescending(x => x.Game.TableId)
+                .ToList();
+            var reunionUserId = newestFirst.Select(x => x.Player.ReunionUserId).FirstOrDefault(v => !string.IsNullOrEmpty(v));
+            var reunionPseudo = newestFirst.Select(x => x.Player.ReunionPseudo).FirstOrDefault(v => !string.IsNullOrEmpty(v));
+
             var playerTournament = await db.PlayerTournaments.FindAsync([parentId, group.Key], cancellationToken);
+            var isNew = playerTournament is null;
             if (playerTournament is null)
             {
                 playerTournament = new PlayerTournament { TournamentParentId = parentId, BgaUserId = group.Key };
                 db.PlayerTournaments.Add(playerTournament);
             }
 
-            playerTournament.BgaName = entries[^1].Player.BgaName ?? playerTournament.BgaName;
+            var bgaName = entries[^1].Player.BgaName ?? playerTournament.BgaName;
+            var faction = DeckFactionResolver.Resolve(mainDeck);
+            var hero = DeckHeroResolver.Resolve(mainDeck);
+            var decksJson = JsonSerializer.Serialize(deckUsages);
+
+            // ComputedAt = "content last actually changed" (it's the keyset
+            // GET /api/tournament-decks pages on, so bumping it on a no-op
+            // recompute would re-send unchanged rows downstream);
+            // RefreshedAt = "a pass looked at it". Every computed column takes
+            // part, ReUnion id/pseudo and the per-deck stats (via DecksJson)
+            // included.
+            var changed = isNew
+                || playerTournament.BgaName != bgaName
+                || playerTournament.ReunionUserId != reunionUserId
+                || playerTournament.ReunionPseudo != reunionPseudo
+                || playerTournament.Wins != wins
+                || playerTournament.Losses != losses
+                || playerTournament.DecksPlayed != deckGroups.Count
+                || playerTournament.MainDeck != mainDeck
+                || playerTournament.Faction != faction
+                || playerTournament.Hero != hero
+                || playerTournament.DecksJson != decksJson;
+
+            playerTournament.BgaName = bgaName;
+            playerTournament.ReunionUserId = reunionUserId;
+            playerTournament.ReunionPseudo = reunionPseudo;
             playerTournament.Wins = wins;
             playerTournament.Losses = losses;
             playerTournament.DecksPlayed = deckGroups.Count;
             playerTournament.MainDeck = mainDeck;
-            playerTournament.Faction = DeckFactionResolver.Resolve(mainDeck);
-            playerTournament.Hero = DeckHeroResolver.Resolve(mainDeck);
-            playerTournament.DecksJson = JsonSerializer.Serialize(deckUsages);
-            playerTournament.ComputedAt = now;
+            playerTournament.Faction = faction;
+            playerTournament.Hero = hero;
+            playerTournament.DecksJson = decksJson;
+            if (changed)
+            {
+                playerTournament.ComputedAt = now;
+            }
             playerTournament.RefreshedAt = now;
             // AdminWinsAdjustment / AdminLossesAdjustment / AdminAdjustmentNote
             // are deliberately untouched: a recompute must never erase a

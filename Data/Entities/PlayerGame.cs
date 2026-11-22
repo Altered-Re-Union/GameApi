@@ -22,5 +22,11 @@ public class PlayerGame
 
     public string? PlayedCards { get; set; }
 
+    /// <summary>The player's ReUnion (AlteredAuth/Keycloak) account id -- the token's `sub` -- as altered-bga-api's feed carries it. Null when the player has no linked ReUnion account, or for rows pulled before the feed carried it.</summary>
+    public string? ReunionUserId { get; set; }
+
+    /// <summary>The player's ReUnion pseudo as altered-bga-api's feed carries it. Null under the same conditions as ReunionUserId.</summary>
+    public string? ReunionPseudo { get; set; }
+
     public Game Game { get; set; } = null!;
 }

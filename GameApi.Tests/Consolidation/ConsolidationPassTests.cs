@@ -69,7 +69,12 @@ public sealed class ConsolidationPassTests
         Assert.Equal(2, p1.DecksPlayed);
 
         var decks = JsonSerializer.Deserialize<List<DeckUsage>>(p1.DecksJson!)!;
-        Assert.Equal([new DeckUsage(deckA, 2), new DeckUsage(deckB, 1)], decks);
+        Assert.Equal(
+            [
+                new DeckUsage(deckA, 2, Wins: 1, Losses: 0, LastPlayedAt: BaseTime.AddMinutes(1)),
+                new DeckUsage(deckB, 1, Wins: 0, Losses: 0, LastPlayedAt: BaseTime.AddMinutes(2)),
+            ],
+            decks);
     }
 
     [Fact]
@@ -246,13 +251,156 @@ public sealed class ConsolidationPassTests
         Assert.Equal(BaseTime, secondPassClient.Requests[0].Since);
     }
 
+    [Fact]
+    public async Task RunAsync_DeckUsages_CarryPerDeckWinsLossesAndLastPlayedAt()
+    {
+        using var db = NewInMemoryDb();
+        var deckA = EncodeDeck("3 ALT_CORE_B_BR_19_C\n");
+        var deckB = EncodeDeck("3 ALT_CORE_B_YZ_07_C\n");
+        var client = new FakeGameSyncClient().EnqueueOnePage(
+            NewGame(1, BaseTime, 500, "Winter Cup", 500,
+                NewPlayer("p1", "P1", true, deckA), NewPlayer("p2", "P2", false)),
+            NewGame(2, BaseTime.AddMinutes(1), 500, "Winter Cup", 500,
+                NewPlayer("p1", "P1", false, deckA), NewPlayer("p2", "P2", true)),
+            // No recognized winner: counts toward neither, but is still a game played with deckA.
+            NewGame(3, BaseTime.AddMinutes(2), 500, "Winter Cup", 500,
+                NewPlayer("p1", "P1", false, deckA), NewPlayer("p2", "P2", false)),
+            NewGame(4, BaseTime.AddMinutes(3), 500, "Winter Cup", 500,
+                NewPlayer("p1", "P1", true, deckB), NewPlayer("p2", "P2", false)));
+
+        await ConsolidationPass.RunAsync(db, client, pageSize: 200);
+
+        var p1 = await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p1");
+        Assert.Equal(2, p1.Wins);
+        Assert.Equal(1, p1.Losses);
+        var decks = JsonSerializer.Deserialize<List<DeckUsage>>(p1.DecksJson!)!;
+        Assert.Equal(
+            [
+                new DeckUsage(deckA, 3, Wins: 1, Losses: 1, LastPlayedAt: BaseTime.AddMinutes(2)),
+                new DeckUsage(deckB, 1, Wins: 1, Losses: 0, LastPlayedAt: BaseTime.AddMinutes(3)),
+            ],
+            decks);
+    }
+
+    [Fact]
+    public async Task RunAsync_ReunionIdentity_IsMirroredAndTakenFromTheMostRecentGameThatCarriesIt()
+    {
+        using var db = NewInMemoryDb();
+        var client = new FakeGameSyncClient().EnqueueOnePage(
+            NewGame(1, BaseTime, 500, "Winter Cup", 500,
+                NewPlayer("p1", "P1", true, reunionUserId: "kc-old", reunionPseudo: "OldPseudo"),
+                NewPlayer("p2", "P2", false)),
+            NewGame(2, BaseTime.AddMinutes(1), 500, "Winter Cup", 500,
+                NewPlayer("p1", "P1", true, reunionUserId: "kc-new", reunionPseudo: "NewPseudo"),
+                NewPlayer("p2", "P2", false)),
+            // A later game without a ReUnion link never erases the known one.
+            NewGame(3, BaseTime.AddMinutes(2), 500, "Winter Cup", 500,
+                NewPlayer("p1", "P1", true),
+                NewPlayer("p2", "P2", false)));
+
+        await ConsolidationPass.RunAsync(db, client, pageSize: 200);
+
+        var mirrored = await db.PlayerGames.SingleAsync(p => p.TableId == 2 && p.BgaUserId == "p1");
+        Assert.Equal("kc-new", mirrored.ReunionUserId);
+        Assert.Equal("NewPseudo", mirrored.ReunionPseudo);
+
+        var p1 = await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p1");
+        Assert.Equal("kc-new", p1.ReunionUserId);
+        Assert.Equal("NewPseudo", p1.ReunionPseudo);
+
+        var p2 = await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p2");
+        Assert.Null(p2.ReunionUserId);
+        Assert.Null(p2.ReunionPseudo);
+    }
+
+    [Fact]
+    public async Task RunAsync_ComputedAt_MovesOnlyWhenTheRowsContentChanges_PseudoIncluded()
+    {
+        using var db = NewInMemoryDb();
+        await ConsolidationPass.RunAsync(db, new FakeGameSyncClient().EnqueueOnePage(
+            NewGame(1, BaseTime, 500, "Winter Cup", 500,
+                NewPlayer("p1", "P1", true, reunionUserId: "kc-1", reunionPseudo: "Before"),
+                NewPlayer("p2", "P2", false))), pageSize: 200);
+        var first = await db.PlayerTournaments.AsNoTracking().SingleAsync(p => p.BgaUserId == "p1");
+
+        // Same tournament recomputed (a game between other players), p1's content unchanged.
+        await Task.Delay(20);
+        await ConsolidationPass.RunAsync(db, new FakeGameSyncClient().EnqueueOnePage(
+            NewGame(2, BaseTime.AddMinutes(1), 500, "Winter Cup", 500,
+                NewPlayer("p3", "P3", true), NewPlayer("p4", "P4", false))), pageSize: 200);
+        var unchanged = await db.PlayerTournaments.AsNoTracking().SingleAsync(p => p.BgaUserId == "p1");
+        Assert.Equal(first.ComputedAt, unchanged.ComputedAt);
+        Assert.True(unchanged.RefreshedAt > first.RefreshedAt);
+
+        // Table 1 re-pulled with only the pseudo changed.
+        await Task.Delay(20);
+        await ConsolidationPass.RunAsync(db, new FakeGameSyncClient().EnqueueOnePage(
+            NewGame(1, BaseTime, 500, "Winter Cup", 500,
+                NewPlayer("p1", "P1", true, reunionUserId: "kc-1", reunionPseudo: "After"),
+                NewPlayer("p2", "P2", false))), pageSize: 200);
+        var renamed = await db.PlayerTournaments.AsNoTracking().SingleAsync(p => p.BgaUserId == "p1");
+        Assert.Equal("After", renamed.ReunionPseudo);
+        Assert.True(renamed.ComputedAt > first.ComputedAt);
+        // p2's row was recomputed in that same pass but didn't change.
+        var p2 = await db.PlayerTournaments.AsNoTracking().SingleAsync(p => p.BgaUserId == "p2");
+        Assert.Equal(first.ComputedAt, p2.ComputedAt);
+    }
+
+    [Fact]
+    public void GameSyncPlayer_FeedRowWithoutReunionFields_StillDeserializes()
+    {
+        var webOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+
+        var legacy = JsonSerializer.Deserialize<GameSyncPlayer>(
+            """{"bgaUserId":"8412","bgaName":"P1","isWinner":true,"deck":"d","playedCards":null}""", webOptions)!;
+        Assert.Equal("8412", legacy.BgaUserId);
+        Assert.Null(legacy.ReunionUserId);
+        Assert.Null(legacy.ReunionPseudo);
+
+        var current = JsonSerializer.Deserialize<GameSyncPlayer>(
+            """{"bgaUserId":"8412","isWinner":false,"reunionUserId":"kc-sub","reunionPseudo":"Pseudo"}""", webOptions)!;
+        Assert.Equal("kc-sub", current.ReunionUserId);
+        Assert.Equal("Pseudo", current.ReunionPseudo);
+    }
+
+    [Fact]
+    public void DeckUsage_DecksJsonWrittenBeforePerDeckStats_StillReads()
+    {
+        var decks = JsonSerializer.Deserialize<List<DeckUsage>>("""[{"Deck":"deckA","Games":2}]""")!;
+
+        Assert.Equal([new DeckUsage("deckA", 2, 0, 0, null)], decks);
+    }
+
+    [Fact]
+    public async Task DeckStatsBackfill_RebuildsTournamentsWhoseDecksJsonPredatesPerDeckStats_ThenIsANoOp()
+    {
+        using var db = NewInMemoryDb();
+        var deckA = EncodeDeck("3 ALT_CORE_B_BR_19_C\n");
+        await ConsolidationPass.RunAsync(db, new FakeGameSyncClient().EnqueueOnePage(
+            NewGame(1, BaseTime, 500, "Winter Cup", 500,
+                NewPlayer("p1", "P1", true, deckA), NewPlayer("p2", "P2", false))), pageSize: 200);
+        var p1 = await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p1");
+        p1.DecksJson = JsonSerializer.Serialize(new[] { new { Deck = deckA, Games = 1 } });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(1, await DeckStatsBackfill.RunOnceAsync(db));
+
+        var rebuilt = await db.PlayerTournaments.SingleAsync(p => p.BgaUserId == "p1");
+        Assert.Equal(
+            [new DeckUsage(deckA, 1, Wins: 1, Losses: 0, LastPlayedAt: BaseTime)],
+            JsonSerializer.Deserialize<List<DeckUsage>>(rebuilt.DecksJson!)!);
+        Assert.Equal(0, await DeckStatsBackfill.RunOnceAsync(db));
+    }
+
     private static GameSyncGame NewGame(
         long tableId, DateTimeOffset receivedAt, long? tournamentId, string? tournamentName, long? tournamentParentId,
         params GameSyncPlayer[] players) => new(
             tableId, receivedAt, "FRONTIER", tournamentId, tournamentName, tournamentParentId, null, players);
 
-    private static GameSyncPlayer NewPlayer(string bgaUserId, string bgaName, bool isWinner, string? deck = null) =>
-        new(bgaUserId, bgaName, isWinner, deck, null);
+    private static GameSyncPlayer NewPlayer(
+        string bgaUserId, string bgaName, bool isWinner, string? deck = null,
+        string? reunionUserId = null, string? reunionPseudo = null) =>
+        new(bgaUserId, bgaName, isWinner, deck, null, reunionUserId, reunionPseudo);
 
     private static string EncodeDeck(string text) => DeckfmtCodec.EncodeList(text);
 

@@ -29,6 +29,13 @@ from that local mirror's entire history into two computed tables:
   faction is not carried on the raw feed at all, it's computed here from
   decoded deck content, and so will `Hero` once a fixed hero-eligible card
   reference list exists to match against (currently an unpopulated column).
+  Each distinct decklist (`DecksJson`) also carries its own games / wins /
+  losses / last-played timestamp (same win/loss rule as the player totals),
+  and the row carries the player's ReUnion (Keycloak) account id and pseudo,
+  taken from their most recent game in the tournament that had one --
+  `altered-bga-api`'s feed appends `reunionUserId` / `reunionPseudo` to each
+  player. `ComputedAt` only moves when a row's computed content actually
+  changes (`RefreshedAt` moves on every pass that looks at it).
 
 Every player row also carries an **admin differential** --
 `AdminWinsAdjustment` / `AdminLossesAdjustment` / `AdminAdjustmentNote` --
@@ -39,7 +46,7 @@ them itself.
 
 ## API
 
-Two different auth models, by how privileged the route is:
+Separate auth models, by how privileged the route is and who calls it:
 
 - `GET /api/tournaments` -- every tournament with a computed aggregate.
 - `GET /api/tournaments/{tournamentParentId}/players` -- every player's
@@ -63,6 +70,23 @@ Two different auth models, by how privileged the route is:
   every reader holds. It requires `Authorization: Bearer <key>` matching its
   own `ApiKeys:Adjustment` secret instead; a valid `bga-game-history`-scoped
   token alone does not unlock it. `401` on a missing/wrong key.
+
+- `GET /api/tournament-decks?after=<cursor>&pageSize=<1..500, default 200>`
+  -- service-to-service feed for DeckApi, which publishes tournament
+  decklists under the player's ReUnion identity. One item per
+  `PlayerTournament` row (linked to a ReUnion account or not), with the
+  tournament's name/mode, `bgaUserId`, `reunionUserId`, `pseudo` (ReUnion
+  pseudo) and every decklist with its `games`/`wins`/`losses`/`lastPlayedAt`.
+  No `bgaName`, no admin adjustments (those are per player, not per deck).
+  Keyset-paginated on (`computedAt`, `tournamentParentId`, `bgaUserId`):
+  `next` is an opaque cursor (the incoming `after` when the page is empty),
+  so a caller polls forever with the last `next` and sees every new or
+  changed row. `Authorization: Bearer <key>` matching `ApiKeys:DeckApi`;
+  `401` on a missing/wrong key, and always `401` while that key is
+  unconfigured. `400` on a malformed cursor.
+
+The players route's `bgaName` is slated for removal once the website reads
+`pseudo` (the ReUnion pseudo) instead; new consumers should use `pseudo`.
 
 ## Run locally
 

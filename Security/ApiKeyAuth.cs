@@ -5,10 +5,11 @@ namespace GameApi.Security;
 
 /// <summary>
 /// Fixed-time comparison against a configured API key -- vendored from
-/// altered-bga-api's AlteredBgaApi.Security.ApiKeyAuth as-is. Used only by
-/// the admin adjustment endpoint: unlike the read endpoints (AlteredAuth
-/// bearer + "bga-game-history" scope), setting a win/loss adjustment is a
-/// privileged action gated on its own dedicated secret.
+/// altered-bga-api's AlteredBgaApi.Security.ApiKeyAuth as-is. Used by the
+/// admin adjustment endpoint (ApiKeys:Adjustment) and DeckApi's
+/// GET /api/tournament-decks feed (ApiKeys:DeckApi): unlike the read
+/// endpoints (AlteredAuth bearer + "bga-game-history" scope), each is gated
+/// on its own dedicated per-consumer secret.
 /// </summary>
 public static class ApiKeyAuth
 {

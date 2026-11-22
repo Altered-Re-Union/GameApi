@@ -63,6 +63,8 @@ public static class TournamentsHandler
         var players = rows.Select(p => new PlayerTournamentSummary(
             p.BgaUserId,
             p.BgaName,
+            p.ReunionUserId,
+            p.ReunionPseudo,
             p.Wins,
             p.Losses,
             p.AdminWinsAdjustment,
@@ -113,10 +115,16 @@ public sealed record TournamentsQuery(string? Mode, int? MinPlayers, long? Tourn
 /// total adds the Admin* adjustment itself (Wins + AdminWinsAdjustment), so
 /// the computed and hand-corrected parts stay visible/auditable separately
 /// rather than being pre-merged into one number.
+///
+/// Pseudo is the player's ReUnion pseudo (ReunionUserId its account id), the
+/// public display name going forward. BgaName is slated for removal once the
+/// website reads Pseudo instead -- don't build new consumers on it.
 /// </summary>
 public sealed record PlayerTournamentSummary(
     string BgaUserId,
     string? BgaName,
+    string? ReunionUserId,
+    string? Pseudo,
     int Wins,
     int Losses,
     int AdminWinsAdjustment,
