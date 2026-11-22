@@ -77,6 +77,12 @@ namespace GameApi.Data.Migrations
                     b.Property<string>("PlayedCards")
                         .HasColumnType("text");
 
+                    b.Property<string>("ReunionPseudo")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReunionUserId")
+                        .HasColumnType("text");
+
                     b.Property<long>("TableId")
                         .HasColumnType("bigint");
 
@@ -131,10 +137,18 @@ namespace GameApi.Data.Migrations
                     b.Property<DateTimeOffset>("RefreshedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ReunionPseudo")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReunionUserId")
+                        .HasColumnType("text");
+
                     b.Property<int>("Wins")
                         .HasColumnType("integer");
 
                     b.HasKey("TournamentParentId", "BgaUserId");
+
+                    b.HasIndex("ComputedAt", "TournamentParentId", "BgaUserId");
 
                     b.ToTable("PlayerTournaments");
                 });

@@ -15,6 +15,12 @@ public class PlayerTournament
 
     public string? BgaName { get; set; }
 
+    /// <summary>ReUnion (Keycloak `sub`) account id, from the player's most recent game in this tournament that carried one. Computed, rebuilt on every pass.</summary>
+    public string? ReunionUserId { get; set; }
+
+    /// <summary>ReUnion pseudo, from the player's most recent game in this tournament that carried one. Computed, rebuilt on every pass. Exposed as `pseudo` -- the public display name, replacing BgaName.</summary>
+    public string? ReunionPseudo { get; set; }
+
     /// <summary>Tallied from IsWinner across the player's games in this tournament.</summary>
     public int Wins { get; set; }
 
@@ -48,7 +54,9 @@ public class PlayerTournament
     /// <summary>Required whenever an admin adjustment is set -- the audit trail the adjustment endpoint exists for.</summary>
     public string? AdminAdjustmentNote { get; set; }
 
+    /// <summary>When the computed content (everything but the Admin* columns) last actually changed -- the keyset the DeckApi feed (GET /api/tournament-decks) pages on.</summary>
     public DateTimeOffset ComputedAt { get; set; }
 
+    /// <summary>When a consolidation pass last looked at this row, whether or not anything changed.</summary>
     public DateTimeOffset RefreshedAt { get; set; }
 }

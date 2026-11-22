@@ -26,6 +26,7 @@ public sealed class ConsolidationWorker(
 
         await RunTournamentParentIdBackfillSafeAsync(stoppingToken);
         await RunTournamentMetadataBackfillSafeAsync(stoppingToken);
+        await RunDeckStatsBackfillSafeAsync(stoppingToken);
 
         if (config.RunAtStartup)
         {
@@ -74,6 +75,25 @@ public sealed class ConsolidationWorker(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "TournamentMetadataBackfill failed");
+        }
+    }
+
+    /// <summary>Same once-per-process-in-effect, fail-open shape as RunTournamentMetadataBackfillSafeAsync -- see DeckStatsBackfill.</summary>
+    private async Task RunDeckStatsBackfillSafeAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<GameApiDbContext>();
+            var backfilledCount = await DeckStatsBackfill.RunOnceAsync(db, cancellationToken);
+            if (backfilledCount > 0)
+            {
+                logger.LogInformation("DeckStatsBackfill complete: tournamentsBackfilled={BackfilledCount}", backfilledCount);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "DeckStatsBackfill failed");
         }
     }
 

@@ -44,6 +44,8 @@ public class GameApiDbContext(DbContextOptions<GameApiDbContext> options) : DbCo
         b.Entity<PlayerTournament>(e =>
         {
             e.HasKey(x => new { x.TournamentParentId, x.BgaUserId });
+            // Keyset for GET /api/tournament-decks (see Tournaments/TournamentDecksHandler).
+            e.HasIndex(x => new { x.ComputedAt, x.TournamentParentId, x.BgaUserId });
         });
 
         b.Entity<SyncCursor>(e =>

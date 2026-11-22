@@ -21,12 +21,15 @@ public sealed class GameApiFactory : WebApplicationFactory<Program>
 
     public string AdjustmentApiKey { get; } = "test-adjustment-key";
 
+    public string DeckApiKey { get; } = "test-deckapi-key";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("AlteredBgaApi:BaseUrl", "http://127.0.0.1:1/");
         builder.UseSetting("AlteredBgaApi:ApiKey", "test-bga-api-key");
         builder.UseSetting("Keycloak:TestSigningKey", JwtTokenHelper.TestSigningKey);
         builder.UseSetting("ApiKeys:Adjustment", AdjustmentApiKey);
+        builder.UseSetting("ApiKeys:DeckApi", DeckApiKey);
         builder.UseSetting("Consolidation:Enabled", "false");
 
         builder.ConfigureServices(services =>
